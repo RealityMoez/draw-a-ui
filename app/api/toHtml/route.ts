@@ -26,19 +26,32 @@ export async function POST(request: Request) {
     ],
   };
 
+  const cookies = request.headers.get('Cookie');
+  const OPENAI_API_KEY = cookies ? (new Map(cookies.split(';').map(cookie => {
+    const [key, value] = cookie.trim().split('=');
+    return [key, value] as [string, string];
+  }))).get('OPENAI_API_KEY') : process.env.OPENAI_API_KEY;
+
   let json = null;
-  try {
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(body),
-    });
-    json = await resp.json();
-  } catch (e) {
-    console.log(e);
+  if(OPENAI_API_KEY)
+  {
+    try {
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+        },
+        body: JSON.stringify(body),
+      });
+      json = await resp.json();
+    } catch (e) {
+      console.log(e);
+    }
+  }
+  else
+  {
+    alert("No API key provided");
   }
 
   return new Response(JSON.stringify(json), {

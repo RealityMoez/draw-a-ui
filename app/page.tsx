@@ -8,6 +8,7 @@ import { blobToBase64 } from "@/lib/blobToBase64";
 import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import { PreviewModal } from "@/components/PreviewModal";
+import { useCookies } from 'react-cookie';
 
 const Tldraw = dynamic(async () => (await import("@tldraw/tldraw")).Tldraw, {
   ssr: false,
@@ -54,11 +55,34 @@ export default function Home() {
 function ExportButton({ setHtml }: { setHtml: (html: string) => void }) {
   const editor = useEditor();
   const [loading, setLoading] = useState(false);
+  const [cookies, setCookie] = useCookies(['OPENAI_API_KEY']);
+  const [OPENAI_API_KEY, setOPENAI_API_KEY] = useState<string | null>(cookies.OPENAI_API_KEY || null);
   // A tailwind styled button that is pinned to the bottom right of the screen
   return (
     <button
       onClick={async (e) => {
+        e.preventDefault();
         setLoading(true);
+      
+        // Check for API key in cookies or environment variables
+        const cookies = document.cookie;
+        const OPENAI_API_KEY = cookies ? (new Map(cookies.split(';').map(cookie => {
+          const [key, value] = cookie.trim().split('=');
+          return [key, value] as [string, string];
+        }))).get('OPENAI_API_KEY') : process.env.OPENAI_API_KEY;
+      
+        // If API key is missing, prompt the user to enter it
+        if (OPENAI_API_KEY == "") {
+          const userKey = window.prompt('Please enter your (vaild) OpenAI API key:');
+          if (userKey) {
+            setCookie('OPENAI_API_KEY', userKey, { path: '/' });
+            setOPENAI_API_KEY(userKey);
+          } else {
+            setLoading(false);
+            return;
+          }
+        }
+
         try {
           e.preventDefault();
           const svg = await editor.getSvg(
@@ -77,6 +101,7 @@ function ExportButton({ setHtml }: { setHtml: (html: string) => void }) {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              "Cookie": document.cookie,
             },
             body: JSON.stringify({ image: dataUrl }),
           });
@@ -84,7 +109,8 @@ function ExportButton({ setHtml }: { setHtml: (html: string) => void }) {
           const json = await resp.json();
 
           if (json.error) {
-            alert("Error from open ai: " + JSON.stringify(json.error));
+            alert(JSON.stringify(json.error.message).replaceAll(`"`, ''));
+            setCookie('OPENAI_API_KEY', "", { path: '/' });
             return;
           }
 
